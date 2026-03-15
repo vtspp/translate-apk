@@ -4,8 +4,10 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
+import android.media.MediaRecorder
 import android.os.Bundle
 import android.speech.RecognizerIntent
+import android.util.Base64
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -19,8 +21,8 @@ import br.com.github.vtspp.databinding.FragmentHomeBinding
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
-import okio.ByteString.Companion.decodeBase64
 import org.json.JSONObject
+import java.io.File
 import java.io.IOException
 import java.util.*
 
@@ -32,6 +34,8 @@ class HomeFragment : Fragment() {
     private val REQUEST_RECORD_AUDIO_PERMISSION = 200
     private val SPEECH_REQUEST_CODE = 100
     private var selectedLocale = "pt-BR"
+    private var mediaRecorder: MediaRecorder? = null
+    private var audioFile: File? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -68,11 +72,11 @@ class HomeFragment : Fragment() {
     }
 
     private fun startSpeechRecognition() {
+        startRecording()
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
             putExtra(RecognizerIntent.EXTRA_PROMPT, "Fale algo")
-            putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, "")
         }
         startActivityForResult(intent, SPEECH_REQUEST_CODE)
     }
@@ -83,14 +87,7 @@ class HomeFragment : Fragment() {
             val results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
             val spokenText = results?.get(0) ?: ""
             binding.textHome.text = spokenText
-            data.data?.let {
-                // Aqui você pode processar o áudio se necessário
-                // Por exemplo, você pode ler os bytes do áudio e convertê-los para base64
-                val audioBytes = it.toString().decodeBase64() // Exemplo de conversão, ajuste conforme necessário
-                if (audioBytes != null) {
-                    sendToAPI(spokenText, audioBytes.base64())
-                }
-            }
+            stopRecording(spokenText)
         }
     }
 
@@ -153,9 +150,47 @@ class HomeFragment : Fragment() {
         }
     }
 
+    private fun startRecording() {
+        mediaRecorder = MediaRecorder().apply {
+            setAudioSource(MediaRecorder.AudioSource.MIC)
+            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            audioFile = File(requireContext().cacheDir, "recorded_audio.mp4")
+            setOutputFile(audioFile!!.absolutePath)
+            try {
+                prepare()
+                start()
+            } catch (e: IOException) {
+                Toast.makeText(requireContext(), "Erro ao iniciar gravação: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun stopRecording(spokenText: String) {
+        mediaRecorder?.apply {
+            try {
+                stop()
+                release()
+            } catch (e: Exception) {
+                Toast.makeText(requireContext(), "Erro ao parar a gravação: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+        mediaRecorder = null
+        binding.textHome.text = "Processando..."
+        val audioBytes = audioFile?.readBytes()
+        if (audioBytes != null) {
+            val base64Audio = Base64.encodeToString(audioBytes, Base64.NO_WRAP)
+            sendToAPI(spokenText, base64Audio)
+        } else {
+            Toast.makeText(requireContext(), "Erro ao ler áudio", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+        mediaRecorder?.release()
+        mediaRecorder = null
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
