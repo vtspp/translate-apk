@@ -19,6 +19,7 @@ import br.com.github.vtspp.databinding.FragmentHomeBinding
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import okio.ByteString.Companion.decodeBase64
 import org.json.JSONObject
 import java.io.IOException
 import java.util.*
@@ -30,6 +31,7 @@ class HomeFragment : Fragment() {
     private lateinit var client: OkHttpClient
     private val REQUEST_RECORD_AUDIO_PERMISSION = 200
     private val SPEECH_REQUEST_CODE = 100
+    private var selectedLocale = "pt-BR"
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -57,6 +59,11 @@ class HomeFragment : Fragment() {
             }
         }
 
+        binding.localeButton.setOnClickListener {
+            selectedLocale = if (selectedLocale == "pt-BR") "ar-SA" else "pt-BR"
+            binding.localeButton.text = "Locale: $selectedLocale"
+        }
+
         return root
     }
 
@@ -65,27 +72,42 @@ class HomeFragment : Fragment() {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
             putExtra(RecognizerIntent.EXTRA_PROMPT, "Fale algo")
+            putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, "")
         }
         startActivityForResult(intent, SPEECH_REQUEST_CODE)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == SPEECH_REQUEST_CODE && resultCode == android.app.Activity.RESULT_OK) {
-            val results = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+        if (requestCode == SPEECH_REQUEST_CODE && resultCode == android.app.Activity.RESULT_OK && data != null) {
+            val results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
             val spokenText = results?.get(0) ?: ""
             binding.textHome.text = spokenText
-            sendToAPI(spokenText)
+
+            data.clipData?.let {
+                val audioUri = it.getItemAt(0).uri
+                // Aqui você pode processar o áudio se necessário
+                audioUri.encodedFragment?.let { encodedAudio ->
+                    val audioBytes = encodedAudio.decodeBase64()
+                    // Faça algo com os bytes do áudio, como enviar para a API
+                    if (audioBytes != null) {
+                        sendToAPI(spokenText, audioBytes.base64())
+                    }
+                }
+            }
         }
     }
 
-    private fun sendToAPI(text: String) {
+    private fun sendToAPI(text: String, voiceReference: String) {
         val json = JSONObject()
             .put("action", "text-to-speech")
             .put("targetText", text)
-            .put("voicePromptId", "eedd9a83-eccc-4c66-b8aa-1d9eb490e57e_prompt-reading-neutral")
+            .put("promptBoost", true)
+            //.put("voicePromptId", "eedd9a83-eccc-4c66-b8aa-1d9eb490e57e_prompt-reading-neutral")
             .put("model", "dd-etts-3.0")
-            .put("locale", "pt-BR")
+            .put("locale", selectedLocale)
+            .put("mode", "rest")
+            .put("voiceReference", voiceReference)
             .toString()
         val body = json.toRequestBody("application/json".toMediaType())
         val request = Request.Builder()
