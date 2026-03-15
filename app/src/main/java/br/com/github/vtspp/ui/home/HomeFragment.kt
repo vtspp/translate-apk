@@ -4,9 +4,10 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
-import android.media.MediaRecorder
 import android.os.Bundle
+import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.util.Base64
 import android.view.LayoutInflater
 import android.view.View
@@ -32,10 +33,9 @@ class HomeFragment : Fragment() {
     private val binding get() = _binding!!
     private lateinit var client: OkHttpClient
     private val REQUEST_RECORD_AUDIO_PERMISSION = 200
-    private val SPEECH_REQUEST_CODE = 100
     private var selectedLocale = "pt-BR"
-    private var mediaRecorder: MediaRecorder? = null
-    private var audioFile: File? = null
+    private var speechRecognizer: SpeechRecognizer? = null
+    private var audioBuffer: ByteArray? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -75,28 +75,54 @@ class HomeFragment : Fragment() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "Fale algo")
+            putExtra("android.speech.extra.GET_AUDIO", true)
         }
-        startRecording()
-        startActivityForResult(intent, SPEECH_REQUEST_CODE)
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == SPEECH_REQUEST_CODE && resultCode == android.app.Activity.RESULT_OK && data != null) {
-            stopRecording()
-            val results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            val spokenText = results?.get(0) ?: ""
-            binding.textHome.text = spokenText
-            val audioBytes = audioFile?.readBytes()
-
-            if (audioBytes != null) {
-                val base64Audio = Base64.encodeToString(audioBytes, Base64.NO_WRAP)
-                sendToAPI(spokenText, base64Audio)
-            } else {
-                Toast.makeText(requireContext(), "Erro ao ler áudio", Toast.LENGTH_SHORT).show()
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(requireContext())
+        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {
+                Toast.makeText(requireContext(), "Fale agora...", Toast.LENGTH_SHORT).show()
             }
-        }
+
+            override fun onBeginningOfSpeech() {
+                Toast.makeText(requireContext(), "Capturando audio. Aguarde...", Toast.LENGTH_SHORT).show()
+            }
+
+            override fun onRmsChanged(rmsdB: Float) {
+            }
+
+            override fun onBufferReceived(buffer: ByteArray?) {
+                audioBuffer = buffer
+            }
+
+            override fun onEndOfSpeech() {
+                Toast.makeText(requireContext(), "Audio Capturado...", Toast.LENGTH_SHORT).show()
+            }
+
+            override fun onError(error: Int) {
+                Toast.makeText(requireContext(), "Erro no reconhecimento de fala", Toast.LENGTH_SHORT).show()
+            }
+
+            override fun onResults(results: Bundle?) {
+                val data = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                val spokenText = data?.get(0) ?: ""
+                binding.textHome.text = spokenText
+                val audioBytes = audioBuffer
+
+                if (audioBytes != null) {
+                    val base64Audio = Base64.encodeToString(audioBytes, Base64.NO_WRAP)
+                    sendToAPI(spokenText, base64Audio)
+                } else {
+                    Toast.makeText(requireContext(), "Erro ao ler áudio", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onPartialResults(partialResults: Bundle?) {
+            }
+
+            override fun onEvent(eventType: Int, params: Bundle?) {
+            }
+        })
+        speechRecognizer?.startListening(intent)
     }
 
     private fun sendToAPI(text: String, voiceReference: String) {
@@ -158,39 +184,11 @@ class HomeFragment : Fragment() {
         }
     }
 
-    private fun startRecording() {
-        mediaRecorder = MediaRecorder().apply {
-            setAudioSource(MediaRecorder.AudioSource.MIC)
-            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            audioFile = File(requireContext().cacheDir, "recorded_audio.mp4")
-            setOutputFile(audioFile!!.absolutePath)
-            try {
-                prepare()
-                start()
-            } catch (e: IOException) {
-                Toast.makeText(requireContext(), "Erro ao iniciar gravação: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    private fun stopRecording() {
-        mediaRecorder?.apply {
-            try {
-                stop()
-                release()
-            } catch (e: Exception) {
-                Toast.makeText(requireContext(), "Erro ao parar a gravação: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-        }
-        mediaRecorder = null
-    }
-
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
-        mediaRecorder?.release()
-        mediaRecorder = null
+        speechRecognizer?.destroy()
+        speechRecognizer = null
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
