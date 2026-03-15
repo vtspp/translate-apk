@@ -83,16 +83,12 @@ class HomeFragment : Fragment() {
             val results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
             val spokenText = results?.get(0) ?: ""
             binding.textHome.text = spokenText
-
-            data.clipData?.let {
-                val audioUri = it.getItemAt(0).uri
+            data.data?.let {
                 // Aqui você pode processar o áudio se necessário
-                audioUri.encodedFragment?.let { encodedAudio ->
-                    val audioBytes = encodedAudio.decodeBase64()
-                    // Faça algo com os bytes do áudio, como enviar para a API
-                    if (audioBytes != null) {
-                        sendToAPI(spokenText, audioBytes.base64())
-                    }
+                // Por exemplo, você pode ler os bytes do áudio e convertê-los para base64
+                val audioBytes = it.toString().decodeBase64() // Exemplo de conversão, ajuste conforme necessário
+                if (audioBytes != null) {
+                    sendToAPI(spokenText, audioBytes.base64())
                 }
             }
         }
