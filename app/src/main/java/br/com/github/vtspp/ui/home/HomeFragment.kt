@@ -72,22 +72,30 @@ class HomeFragment : Fragment() {
     }
 
     private fun startSpeechRecognition() {
-        startRecording()
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
             putExtra(RecognizerIntent.EXTRA_PROMPT, "Fale algo")
         }
+        startRecording()
         startActivityForResult(intent, SPEECH_REQUEST_CODE)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == SPEECH_REQUEST_CODE && resultCode == android.app.Activity.RESULT_OK && data != null) {
+            stopRecording()
             val results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
             val spokenText = results?.get(0) ?: ""
             binding.textHome.text = spokenText
-            stopRecording(spokenText)
+            val audioBytes = audioFile?.readBytes()
+
+            if (audioBytes != null) {
+                val base64Audio = Base64.encodeToString(audioBytes, Base64.NO_WRAP)
+                sendToAPI(spokenText, base64Audio)
+            } else {
+                Toast.makeText(requireContext(), "Erro ao ler áudio", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -133,7 +141,7 @@ class HomeFragment : Fragment() {
 
     private fun playAudio(audioData: ByteArray) {
         try {
-            val tempFile = java.io.File.createTempFile("audio", ".mp3", requireContext().cacheDir)
+            val tempFile = File.createTempFile("audio", ".mp3", requireContext().cacheDir)
             tempFile.writeBytes(audioData)
             val mediaPlayer = MediaPlayer()
             mediaPlayer.setDataSource(tempFile.absolutePath)
@@ -166,7 +174,7 @@ class HomeFragment : Fragment() {
         }
     }
 
-    private fun stopRecording(spokenText: String) {
+    private fun stopRecording() {
         mediaRecorder?.apply {
             try {
                 stop()
@@ -176,14 +184,6 @@ class HomeFragment : Fragment() {
             }
         }
         mediaRecorder = null
-        binding.textHome.text = "Processando..."
-        val audioBytes = audioFile?.readBytes()
-        if (audioBytes != null) {
-            val base64Audio = Base64.encodeToString(audioBytes, Base64.NO_WRAP)
-            sendToAPI(spokenText, base64Audio)
-        } else {
-            Toast.makeText(requireContext(), "Erro ao ler áudio", Toast.LENGTH_SHORT).show()
-        }
     }
 
     override fun onDestroyView() {
