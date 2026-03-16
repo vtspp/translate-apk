@@ -13,9 +13,12 @@ lifecycleViewmodelKtx = "2.6.1"
 navigationFragmentKtx = "2.6.0"
 navigationUiKtx = "2.6.0"
 okhttp = "4.12.0"
+tarsosdsp = "2.5"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+tarsosdspcore = { group = "be.tarsos.dsp", name = "core", version.ref = "tarsosdsp" }
+tarsosdspjvm = { group = "be.tarsos.dsp", name = "jvm", version.ref = "tarsosdsp" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }

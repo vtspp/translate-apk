@@ -7,6 +7,12 @@ pluginManagement {
                 includeGroupByRegex("androidx.*")
             }
         }
+
+        maven {
+            name = "TarsosDSP repository"
+            url = uri("https://mvn.0110.be/releases")
+        }
+
         mavenCentral()
         gradlePluginPortal()
     }
@@ -14,6 +20,10 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        maven {
+            name = "TarsosDSP repository"
+            url = uri("https://mvn.0110.be/releases")
+        }
         google()
         mavenCentral()
     }
